@@ -203,6 +203,20 @@ const ReactElement = function(type, key, ref, self, source, owner, props) {
     // 遍历配置，把内建的几个属性剔除后丢到 props 中
     for (propName in config) {
       if (
+        // JavaScript 并没有保护 hasOwnProperty 属性名，因此某个对象是有可能存在使用这个属性名的属性，
+        // 使用外部的 hasOwnProperty 获得正确的结果是需要的
+
+        // var foo = {
+        //   hasOwnProperty: function() {
+        //       return false;
+        //   },
+        //   bar: 'Here be dragons'
+        // };
+        // foo.hasOwnProperty('bar'); // 始终返回 false
+        // // 如果担心这种情况，可以直接使用原型链上真正的 hasOwnProperty 方法
+        // ({}).hasOwnProperty.call(foo, 'bar'); // true
+        // // 也可以使用 Object 原型上的 hasOwnProperty 属性
+        // Object.prototype.hasOwnProperty.call(foo, 'bar'); // true
         hasOwnProperty.call(config, propName) &&
         !RESERVED_PROPS.hasOwnProperty(propName)
       ) {
