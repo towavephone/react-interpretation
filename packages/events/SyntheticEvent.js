@@ -152,6 +152,8 @@ Object.assign(SyntheticEvent.prototype, {
    * them back into the pool. This allows a way to hold onto a reference that
    * won't be added back into the pool.
    */
+  // 异步访问事件属性，应该在处理事件时调用 event.persist()
+  // 否则会在事件回调后被释放
   persist: function() {
     this.isPersistent = functionThatReturnsTrue;
   },

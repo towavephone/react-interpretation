@@ -30,11 +30,13 @@ const executeDispatchesAndRelease = function(event: ReactSyntheticEvent) {
   if (event) {
     executeDispatchesInOrder(event);
 
+    // isPersistent 返回值为 true 的话不能释放
     if (!event.isPersistent()) {
       event.constructor.release(event);
     }
   }
 };
+
 const executeDispatchesAndReleaseTopLevel = function(e) {
   return executeDispatchesAndRelease(e);
 };

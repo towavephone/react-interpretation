@@ -195,7 +195,7 @@ const ReactElement = function(type, key, ref, self, source, owner, props) {
       key = '' + config.key;
     }
     // 赋值操作
-    // self 呢就是为了以后正确获取 this
+    // self 是为了以后正确获取 this
     // source 基本来说没啥用，内部有一些 filename, line number 这种
     self = config.__self === undefined ? null : config.__self;
     source = config.__source === undefined ? null : config.__source;

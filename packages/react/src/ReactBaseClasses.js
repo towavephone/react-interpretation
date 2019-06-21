@@ -139,9 +139,9 @@ if (__DEV__) {
   }
 }
 
-// 以下做的都是继承功能，让 PureComponent 继承自 Component
+// 以下做的都是寄生组合式继承功能，让 PureComponent 继承自 Component
 function ComponentDummy() {}
-ComponentDummy.prototype = Component.prototype;
+ComponentDummy.prototype = Component.prototype; // 寄生组合
 
 /**
  * Convenience component with default shallow equality check for sCU.
@@ -154,7 +154,7 @@ function PureComponent(props, context, updater) {
   this.updater = updater || ReactNoopUpdateQueue;
 }
 
-const pureComponentPrototype = (PureComponent.prototype = new ComponentDummy());
+const pureComponentPrototype = (PureComponent.prototype = new ComponentDummy()); // 寄生组合
 pureComponentPrototype.constructor = PureComponent;
 // Avoid an extra prototype jump for these methods.
 Object.assign(pureComponentPrototype, Component.prototype);
