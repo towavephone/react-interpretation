@@ -30,6 +30,8 @@ const MAGIC_NUMBER_OFFSET = MAX_SIGNED_31_BIT_INT - 1;
 // 1 unit of expiration time represents 10ms.
 export function msToExpirationTime(ms: number): ExpirationTime {
   // Always add an offset so that we don't clash with the magic number for NoWork.
+  // 5000 - 2500 = 2500
+  // 1073741822 - 250 = 1073741572
   return MAGIC_NUMBER_OFFSET - ((ms / UNIT_SIZE) | 0);
 }
 
@@ -46,6 +48,9 @@ function computeExpirationBucket(
   expirationInMs,
   bucketSizeMs,
 ): ExpirationTime {
+  // currentTime 一般是通过 performance.now() - 程序一开始进来就执行一次的 performance.now() 然后再通过 msToExpirationTime 算出来的
+  // 1073741823 毫秒（也就是同步）换算成天是 12 天多点 10737418240
+  // 另外 | 0 + 1 * bucketSizeMs / UNIT_SIZE 是为了抹平一段时间内的时间差
   return (
     MAGIC_NUMBER_OFFSET -
     ceiling(
@@ -85,6 +90,10 @@ export const HIGH_PRIORITY_EXPIRATION = __DEV__ ? 500 : 150;
 export const HIGH_PRIORITY_BATCH_SIZE = 100;
 
 export function computeInteractiveExpiration(currentTime: ExpirationTime) {
+  // currentTime = 1073741572
+  // 250 * 10 = 经过的时间
+  // 250 + 50 = 300
+  // 1073741822 - ((((1073741822 - 1073741572 + 15) / 10) | 0) + 1) * 10
   return computeExpirationBucket(
     currentTime,
     HIGH_PRIORITY_EXPIRATION,

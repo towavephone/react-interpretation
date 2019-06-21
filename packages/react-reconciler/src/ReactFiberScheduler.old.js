@@ -384,8 +384,16 @@ if (__DEV__ && replayFailedUnitOfWorkWithInvokeGuardedCallback) {
 }
 
 function resetStack() {
+  // nextUnitOfWork：下一个需要执行的 fiber 节点
   if (nextUnitOfWork !== null) {
+    // 往上找 fiber 节点
     let interruptedWork = nextUnitOfWork.return;
+    // 如果存在父节点的话，就清掉父节点的 valueStack
+    // valueStack 因为之前代码里没见过，所以去网上查了点资料
+    // 发现这个数组应该是用来存储数据的
+    // 这个做法应该是为了重头开始一个新的任务。因为打断一个任务的时候
+    // 被打断的任务可能已经改变一部分节点的数据，这时候新的任务开始时
+    // 不应该被之前的任务所影响，需要清掉之前任务的影响。
     while (interruptedWork !== null) {
       unwindInterruptedWork(interruptedWork);
       interruptedWork = interruptedWork.return;
@@ -396,7 +404,7 @@ function resetStack() {
     ReactStrictModeWarnings.discardPendingWarnings();
     checkThatStackIsEmpty();
   }
-
+  // 重置变量
   nextRoot = null;
   nextRenderExpirationTime = NoWork;
   nextLatestAbsoluteTimeoutMs = -1;
@@ -1779,6 +1787,7 @@ function resolveRetryThenable(boundaryFiber: Fiber, thenable: Thenable) {
 }
 
 function scheduleWorkToRoot(fiber: Fiber, expirationTime): FiberRoot | null {
+  // 用于记录调度器的状态
   recordScheduleUpdate();
 
   if (__DEV__) {
@@ -1789,6 +1798,8 @@ function scheduleWorkToRoot(fiber: Fiber, expirationTime): FiberRoot | null {
   }
 
   // Update the source fiber's expiration time
+  // expirationTime 越大说明优先级越高
+  // 以下两个 if 判断是在把 fiber 的优先级设置的更高
   if (fiber.expirationTime < expirationTime) {
     fiber.expirationTime = expirationTime;
   }
@@ -1797,13 +1808,18 @@ function scheduleWorkToRoot(fiber: Fiber, expirationTime): FiberRoot | null {
     alternate.expirationTime = expirationTime;
   }
   // Walk the parent path to the root and update the child expiration time.
+  // 获取 fiber 的父节点，Root Fiber 是没有 return 属性的
   let node = fiber.return;
   let root = null;
+  // 判断这时候 fiber 是否为 Root Fiber
   if (node === null && fiber.tag === HostRoot) {
+    // 取出 Fiber Root
     root = fiber.stateNode;
   } else {
     while (node !== null) {
       alternate = node.alternate;
+      // 下面的判断都是在将低优先级设置为高的优先级
+      // 最后判断是否获得了 Root Fiber
       if (node.childExpirationTime < expirationTime) {
         node.childExpirationTime = expirationTime;
         if (
@@ -1826,6 +1842,9 @@ function scheduleWorkToRoot(fiber: Fiber, expirationTime): FiberRoot | null {
     }
   }
 
+  // 这部分内容是 React Profiler 相关的，DevTool 相关的内容
+  // 可以方便找出你的 React 应用的性能瓶颈
+  // 这部分内容不在此介绍
   if (enableSchedulerTracing) {
     if (root !== null) {
       const interactions = __interactionsRef.current;
@@ -1896,7 +1915,8 @@ export function warnIfNotCurrentlyActingUpdatesInDev(fiber: Fiber): void {
   }
 }
 
-function scheduleWork(fiber: Fiber, expirationTime: ExpirationTime) {
+function scheduleWork (fiber: Fiber, expirationTime: ExpirationTime) {
+  // 获取 fiber root
   const root = scheduleWorkToRoot(fiber, expirationTime);
   if (root === null) {
     if (__DEV__) {
@@ -1914,14 +1934,19 @@ function scheduleWork(fiber: Fiber, expirationTime: ExpirationTime) {
     }
     return;
   }
-
+  // 这个分支表示高优先级任务打断低优先级任务
+  // 这种情况发生于以下场景：有一个优先级较低的任务（必然是异步任务）没有执行完，
+  // 执行权交给了浏览器，然后再交还给 JS 的时候有一个新的高优先级任务进来了
+  // 这时候需要去执行高优先级任务，所以需要打断低优先级任务
   if (
     !isWorking &&
     nextRenderExpirationTime !== NoWork &&
     expirationTime > nextRenderExpirationTime
   ) {
     // This is an interruption. (Used for performance tracking.)
+    // 记录被谁打断的
     interruptedBy = fiber;
+    // 重置 stack，具体来说应该是 valueStack
     resetStack();
   }
   markPendingPriorityLevel(root, expirationTime);
@@ -1936,6 +1961,8 @@ function scheduleWork(fiber: Fiber, expirationTime: ExpirationTime) {
     const rootExpirationTime = root.expirationTime;
     requestWork(root, rootExpirationTime);
   }
+  // 在某些生命周期函数中 setState 会造成无限循环
+  // 这里是告知你的代码触发无限循环了
   if (nestedUpdateCount > NESTED_UPDATE_LIMIT) {
     // Reset this back to zero so subsequent updates don't throw.
     nestedUpdateCount = 0;
@@ -2045,12 +2072,15 @@ function scheduleCallbackWithExpirationTime(
   root: FiberRoot,
   expirationTime: ExpirationTime,
 ) {
+  // 判断上一个 callback 是否执行完毕
   if (callbackExpirationTime !== NoWork) {
     // A callback is already scheduled. Check its expiration time (timeout).
+    // 当前任务如果优先级小于上个任务就退出
     if (expirationTime < callbackExpirationTime) {
       // Existing callback has sufficient timeout. Exit.
       return;
     } else {
+      // 否则的话就取消上个 callback
       if (callbackID !== null) {
         // Existing callback has insufficient timeout. Cancel and schedule a
         // new one.
@@ -2059,13 +2089,18 @@ function scheduleCallbackWithExpirationTime(
     }
     // The request callback timer is already running. Don't start a new one.
   } else {
+    // 没有需要执行的上一个 callback，开始定时器，这个函数用于 devtool
     startRequestCallbackTimer();
   }
 
   callbackExpirationTime = expirationTime;
+  // 当前 performance.now() 和程序刚执行时的 performance.now() 相减
   const currentMs = now() - originalStartTimeMs;
   const expirationTimeMs = expirationTimeToMs(expirationTime);
+  // 毫秒相减，优先级越大，算出来的值越小，可以自己模拟一下
+  // 这个值在后面会和 performance.now() 相加再算出一个 expirationTime
   const timeout = expirationTimeMs - currentMs;
+  // 获取优先级，这个优先级有五个，但是这个优先级其实在 scheduleCallback 函数中压根没用到
   const priorityLevel = getCurrentPriorityLevel();
   callbackID = scheduleCallback(priorityLevel, performAsyncWork, {timeout});
 }
@@ -2176,15 +2211,23 @@ function requestCurrentTime() {
 // requestWork is called by the scheduler whenever a root receives an update.
 // It's up to the renderer to call renderRoot at some point in the future.
 function requestWork(root: FiberRoot, expirationTime: ExpirationTime) {
+  // 将 root 加入调度中
   addRootToSchedule(root, expirationTime);
   if (isRendering) {
     // Prevent reentrancy. Remaining work will be scheduled at the end of
     // the currently rendering batch.
     return;
   }
-
+  // 判断是否需要批量更新
+  // 当我们触发事件回调时，其实回调会被 batchedUpdates 函数封装一次
+  // 这个函数会把 isBatchingUpdates 设为 true，也就是说我们在事件回调函数内部
+  // 调用 setState 不会马上触发 state 的更新及渲染，只是单纯创建了一个 updater，然后在这个分支 return 了
+  // 只有当整个事件回调函数执行完毕后恢复 isBatchingUpdates 的值，并且执行 performSyncWork
+  // 想必很多人知道在类似 setTimeout 中使用 setState 以后 state 会马上更新，如果你想在定时器回调中也实现批量更新，
+  // 就可以使用 batchedUpdates 将你需要的代码封装一下
   if (isBatchingUpdates) {
     // Flush work at the end of the batch.
+    // 判断是否不需要批量更新
     if (isUnbatchingUpdates) {
       // ...unless we're inside unbatchedUpdates, in which case we should
       // flush it now.
@@ -2196,9 +2239,15 @@ function requestWork(root: FiberRoot, expirationTime: ExpirationTime) {
   }
 
   // TODO: Get rid of Sync and use current time?
+  // 判断优先级是同步还是异步，异步的话需要调度
   if (expirationTime === Sync) {
     performSyncWork();
   } else {
+    // 函数核心是实现了 requestIdleCallback 的 polyfill 版本
+    // 因为这个函数浏览器的兼容性很差
+    // 具体作用可以查看 MDN 文档 https://developer.mozilla.org/zh-CN/docs/Web/API/Window/requestIdleCallback
+    // 这个函数可以让浏览器空闲时期依次调用函数，这就可以让开发者在主事件循环中执行后台或低优先级的任务，
+    // 而且不会对像动画和用户交互这样延迟敏感的事件产生影响
     scheduleCallbackWithExpirationTime(root, expirationTime);
   }
 }
@@ -2206,8 +2255,10 @@ function requestWork(root: FiberRoot, expirationTime: ExpirationTime) {
 function addRootToSchedule(root: FiberRoot, expirationTime: ExpirationTime) {
   // Add the root to the schedule.
   // Check if this root is already part of the schedule.
+  // 判断 root 是否调度过
   if (root.nextScheduledRoot === null) {
     // This root is not already scheduled. Add it.
+    // root 没有调度过
     root.expirationTime = expirationTime;
     if (lastScheduledRoot === null) {
       firstScheduledRoot = lastScheduledRoot = root;
@@ -2219,6 +2270,7 @@ function addRootToSchedule(root: FiberRoot, expirationTime: ExpirationTime) {
     }
   } else {
     // This root is already scheduled, but its priority may have increased.
+    // root 已经调度过，判断是否需要更新优先级
     const remainingExpirationTime = root.expirationTime;
     if (expirationTime > remainingExpirationTime) {
       // Update the priority.
@@ -2293,6 +2345,7 @@ function findHighestPriorityRoot() {
 }
 
 function performAsyncWork(didTimeout) {
+  // 判断任务是否过期
   if (didTimeout) {
     // The callback timed out. That means at least one update has expired.
     // Iterate through the root schedule. If they contain expired work, set
@@ -2312,15 +2365,18 @@ function performAsyncWork(didTimeout) {
 
   // Keep working on roots until there's no more work, or until there's a higher
   // priority event.
+  // 找到优先级最高的节点
   findHighestPriorityRoot();
-
+  // 判断是否可以打断
   if (disableYielding) {
     // Just do it all
+    // 不可以打断，把任务执行到底
     while (nextFlushedRoot !== null && nextFlushedExpirationTime !== NoWork) {
       performWorkOnRoot(nextFlushedRoot, nextFlushedExpirationTime, false);
       findHighestPriorityRoot();
     }
   } else {
+    // 可以打断
     recomputeCurrentRendererTime();
     currentSchedulerTime = currentRendererTime;
 
@@ -2329,7 +2385,7 @@ function performAsyncWork(didTimeout) {
       const timeout = expirationTimeToMs(nextFlushedExpirationTime);
       stopRequestCallbackTimer(didExpire, timeout);
     }
-
+    // 判断当前不需要打断且当前帧还有时间
     while (
       nextFlushedRoot !== null &&
       nextFlushedExpirationTime !== NoWork &&
@@ -2372,6 +2428,8 @@ function performSyncWork() {
 function performWork(minExpirationTime: ExpirationTime) {
   // Keep working on roots until there's no more work, or until there's a higher
   // priority event.
+  // 这个函数内部逻辑和 performAsyncWork 差不多
+  // 反正最后都是调用 performWorkOnRoot 函数
   findHighestPriorityRoot();
 
   while (
@@ -2463,11 +2521,12 @@ function performWorkOnRoot(
 
   // Check if this is async work or sync/expired work.
   if (!isYieldy) {
+    // 不可打断任务
     // Flush work without yielding.
     // TODO: Non-yieldy work does not necessarily imply expired work. A renderer
     // may want to perform some work without yielding, but also without
     // requiring the root to complete (by triggering placeholders).
-
+    // 判断是否存在已完成的 finishedWork，存在话就完成它
     let finishedWork = root.finishedWork;
     if (finishedWork !== null) {
       // This root is already complete. We can commit it.
@@ -2482,6 +2541,7 @@ function performWorkOnRoot(
         // $FlowFixMe Complains noTimeout is not a TimeoutID, despite the check above
         cancelTimeout(timeoutHandle);
       }
+      // 否则就去渲染成 DOM
       renderRoot(root, isYieldy);
       finishedWork = root.finishedWork;
       if (finishedWork !== null) {
@@ -2490,6 +2550,7 @@ function performWorkOnRoot(
       }
     }
   } else {
+    // 可打断任务
     // Flush async work.
     let finishedWork = root.finishedWork;
     if (finishedWork !== null) {
