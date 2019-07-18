@@ -178,6 +178,7 @@ export function reconcileChildren(
   renderExpirationTime: ExpirationTime,
 ) {
   if (current === null) {
+    // 第一次渲染组件
     // If this is a fresh new component that hasn't been rendered yet, we
     // won't update its child set by applying minimal side-effects. Instead,
     // we will add them all to the child before it gets rendered. That means
@@ -189,6 +190,7 @@ export function reconcileChildren(
       renderExpirationTime,
     );
   } else {
+    // 更新组件
     // If the current child is the same as the work in progress, it means that
     // we haven't yet started any work on these children. Therefore, we use
     // the clone algorithm to create a copy of all the current children.
@@ -614,6 +616,8 @@ function updateFunctionComponent(
     }
     setCurrentPhase(null);
   } else {
+    // 返回值就是这个 let children = Component(props, refOrContext)
+    // 我们可以发现函数组件第二个参数可以接收 context 对象
     nextChildren = renderWithHooks(
       current,
       workInProgress,
@@ -694,12 +698,14 @@ function updateClassComponent(
       workInProgress.effectTag |= Placement;
     }
     // In the initial pass we might need to construct the instance.
+    // 执行构造函数
     constructClassInstance(
       workInProgress,
       Component,
       nextProps,
       renderExpirationTime,
     );
+    // 挂载
     mountClassInstance(
       workInProgress,
       Component,
@@ -716,6 +722,7 @@ function updateClassComponent(
       renderExpirationTime,
     );
   } else {
+    // 更新组件
     shouldUpdate = updateClassInstance(
       current,
       workInProgress,
@@ -756,6 +763,7 @@ function finishClassComponent(
   renderExpirationTime: ExpirationTime,
 ) {
   // Refs should update even if shouldComponentUpdate returns false
+  // 更新 ref，即使不需要更新组件
   markRef(current, workInProgress);
 
   const didCaptureError = (workInProgress.effectTag & DidCapture) !== NoEffect;
@@ -811,6 +819,7 @@ function finishClassComponent(
 
   // React DevTools reads this flag.
   workInProgress.effectTag |= PerformedWork;
+  // 开始 diff 算法，生成新的 children
   if (current !== null && didCaptureError) {
     // If we're recovering from an error, reconcile without reusing any of
     // the existing children. Conceptually, the normal children and the children
@@ -839,7 +848,7 @@ function finishClassComponent(
   if (hasContext) {
     invalidateContextProvider(workInProgress, Component, true);
   }
-
+  // 最后把新的第一个 child 返回出去作为下一个工作节点
   return workInProgress.child;
 }
 
@@ -2066,16 +2075,18 @@ function beginWork(
   if (current !== null) {
     const oldProps = current.memoizedProps;
     const newProps = workInProgress.pendingProps;
-
+    // 判断 props 和 context 是否改变
     if (oldProps !== newProps || hasLegacyContextChanged()) {
       // If props or context changed, mark the fiber as having performed work.
       // This may be unset if the props are determined to be equal later (memo).
       didReceiveUpdate = true;
+    //  判断当前 fiber 的优先级是否小于本次渲染的优先级，小于的话可以跳过
     } else if (updateExpirationTime < renderExpirationTime) {
       didReceiveUpdate = false;
       // This fiber does not have any pending work. Bailout without entering
       // the begin phase. There's still some bookkeeping we that needs to be done
       // in this optimized path, mostly pushing stuff onto the stack.
+      // 根据节点进行优化
       switch (workInProgress.tag) {
         case HostRoot:
           pushHostRootContext(workInProgress);
@@ -2169,6 +2180,8 @@ function beginWork(
           break;
         }
       }
+      // 判断该节点下的子节点优先级是否大于 renderExpirationTime
+      // 如果也是小于的话，就可以直接把整个子树跳过循环
       return bailoutOnAlreadyFinishedWork(
         current,
         workInProgress,
